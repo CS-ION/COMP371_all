@@ -19,14 +19,12 @@ float pointLineDistance(vec3 p, vec3 a, vec3 b)
 
 void main()
 {
-    // --- Compute incenter ---
     float a = length(tv1 - tv2);
     float b = length(tv0 - tv2);
     float c = length(tv0 - tv1);
 
     vec3 incenter = (a * tv0 + b * tv1 + c * tv2) / (a + b + c);
 
-    // --- Compute inradius ---
     float r = pointLineDistance(incenter, tv0, tv1);
 
     float d = distance(FragPos, incenter);

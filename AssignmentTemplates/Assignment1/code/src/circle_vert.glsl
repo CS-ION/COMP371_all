@@ -18,14 +18,11 @@ out vec3 tv2;
 
 void main()
 {
-    // Transform vertex to view space
     vec4 viewPos = modelView * vec4(aPos, 1.0);
     FragPos = viewPos.xyz;
 
-    // Transform normal properly
     Normal = mat3(transpose(inverse(modelView))) * aNormal;
 
-    // Transform triangle vertices to view space as well
     tv0 = (modelView * vec4(v0, 1.0)).xyz;
     tv1 = (modelView * vec4(v1, 1.0)).xyz;
     tv2 = (modelView * vec4(v2, 1.0)).xyz;
