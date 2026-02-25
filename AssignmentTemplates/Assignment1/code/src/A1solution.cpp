@@ -104,7 +104,6 @@ void A1solution::initGL()
     currentMode = 0;
     wireframe = false;
 
-    // Cache uniform locations once
     shaders[currentMode]->use();
     mvLoc = glGetUniformLocation(shaders[currentMode]->ID, "modelView");
     projLoc = glGetUniformLocation(shaders[currentMode]->ID, "projection");
@@ -113,37 +112,19 @@ void A1solution::initGL()
 
 void A1solution::setupBuffers()
 {
-    glGenVertexArrays(1,&VAO);
-    glBindVertexArray(VAO);
+    std::vector<glm::vec3> pos;
+    std::vector<glm::vec3> nrm;
+    std::vector<glm::vec3> triV0;
+    std::vector<glm::vec3> triV1;
+    std::vector<glm::vec3> triV2;
 
-    // Position buffer
-    glGenBuffers(1,&VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER,
-                 vertices.size()*sizeof(glm::vec3),
-                 vertices.data(),
-                 GL_STATIC_DRAW);
+    pos.reserve(indices.size());
+    nrm.reserve(indices.size());
+    triV0.reserve(indices.size());
+    triV1.reserve(indices.size());
+    triV2.reserve(indices.size());
 
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(glm::vec3),(void*)0);
-    glEnableVertexAttribArray(0);
-
-    // Normal buffer
-    glGenBuffers(1,&NBO);
-    glBindBuffer(GL_ARRAY_BUFFER, NBO);
-    glBufferData(GL_ARRAY_BUFFER,
-                 normals.size()*sizeof(glm::vec3),
-                 normals.data(),
-                 GL_STATIC_DRAW);
-
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(glm::vec3),(void*)0);
-    glEnableVertexAttribArray(1);
-
-    // --- Triangle-local vertex buffers ---
-    std::vector<glm::vec3> triV0(vertices.size());
-    std::vector<glm::vec3> triV1(vertices.size());
-    std::vector<glm::vec3> triV2(vertices.size());
-
-    for(size_t i = 0; i < indices.size(); i += 3)
+    for (size_t i = 0; i < indices.size(); i += 3)
     {
         unsigned int i0 = indices[i];
         unsigned int i1 = indices[i+1];
@@ -153,48 +134,70 @@ void A1solution::setupBuffers()
         glm::vec3 v1 = vertices[i1];
         glm::vec3 v2 = vertices[i2];
 
-        triV0[i0] = v0; triV1[i0] = v1; triV2[i0] = v2;
-        triV0[i1] = v0; triV1[i1] = v1; triV2[i1] = v2;
-        triV0[i2] = v0; triV1[i2] = v1; triV2[i2] = v2;
+        glm::vec3 n0 = normals[i0];
+        glm::vec3 n1 = normals[i1];
+        glm::vec3 n2 = normals[i2];
+
+        // vertex 0
+        pos.push_back(v0);
+        nrm.push_back(n0);
+        triV0.push_back(v0);
+        triV1.push_back(v1);
+        triV2.push_back(v2);
+
+        // vertex 1
+        pos.push_back(v1);
+        nrm.push_back(n1);
+        triV0.push_back(v0);
+        triV1.push_back(v1);
+        triV2.push_back(v2);
+
+        // vertex 2
+        pos.push_back(v2);
+        nrm.push_back(n2);
+        triV0.push_back(v0);
+        triV1.push_back(v1);
+        triV2.push_back(v2);
     }
 
-    GLuint PBO[3];
-    glGenBuffers(3, PBO);
+    // create VAO
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
 
-    // Attribute 2
-    glBindBuffer(GL_ARRAY_BUFFER, PBO[0]);
-    glBufferData(GL_ARRAY_BUFFER,
-                 triV0.size()*sizeof(glm::vec3),
-                 triV0.data(),
-                 GL_STATIC_DRAW);
-    glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,sizeof(glm::vec3),(void*)0);
+    GLuint buffers[5];
+    glGenBuffers(5, buffers);
+
+    // positions
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+    glBufferData(GL_ARRAY_BUFFER, pos.size()*sizeof(glm::vec3), pos.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // normals
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[1]);
+    glBufferData(GL_ARRAY_BUFFER, nrm.size()*sizeof(glm::vec3), nrm.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(1);
+
+    // tri v0
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[2]);
+    glBufferData(GL_ARRAY_BUFFER, triV0.size()*sizeof(glm::vec3), triV0.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     glEnableVertexAttribArray(2);
 
-    // Attribute 3
-    glBindBuffer(GL_ARRAY_BUFFER, PBO[1]);
-    glBufferData(GL_ARRAY_BUFFER,
-                 triV1.size()*sizeof(glm::vec3),
-                 triV1.data(),
-                 GL_STATIC_DRAW);
-    glVertexAttribPointer(3,3,GL_FLOAT,GL_FALSE,sizeof(glm::vec3),(void*)0);
+    // tri v1
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[3]);
+    glBufferData(GL_ARRAY_BUFFER, triV1.size()*sizeof(glm::vec3), triV1.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     glEnableVertexAttribArray(3);
 
-    // Attribute 4
-    glBindBuffer(GL_ARRAY_BUFFER, PBO[2]);
-    glBufferData(GL_ARRAY_BUFFER,
-                 triV2.size()*sizeof(glm::vec3),
-                 triV2.data(),
-                 GL_STATIC_DRAW);
-    glVertexAttribPointer(4,3,GL_FLOAT,GL_FALSE,sizeof(glm::vec3),(void*)0);
+    // tri v2
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[4]);
+    glBufferData(GL_ARRAY_BUFFER, triV2.size()*sizeof(glm::vec3), triV2.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     glEnableVertexAttribArray(4);
 
-    // Index buffer
-    glGenBuffers(1,&EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 indices.size()*sizeof(unsigned int),
-                 indices.data(),
-                 GL_STATIC_DRAW);
+    expandedVertexCount = pos.size();
 }
 
 void A1solution::renderLoop()
@@ -215,10 +218,7 @@ void A1solution::renderLoop()
         glUniform3fv(lightLoc,1,&lightPos[0]);
 
         glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES,
-                       static_cast<GLsizei>(indices.size()),
-                       GL_UNSIGNED_INT,
-                       0);
+        glDrawArrays(GL_TRIANGLES, 0, expandedVertexCount);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -234,11 +234,16 @@ void A1solution::processInput()
 
     if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
     {
-        if(!sPressed)
-        {
-            currentMode = (currentMode + 1) % 4;
-            sPressed = true;
-        }
+        if (!sPressed)
+            {
+                currentMode = (currentMode + 1) % 4;
+                sPressed = true;
+
+                shaders[currentMode]->use();
+                mvLoc   = glGetUniformLocation(shaders[currentMode]->ID, "modelView");
+                projLoc = glGetUniformLocation(shaders[currentMode]->ID, "projection");
+                lightLoc= glGetUniformLocation(shaders[currentMode]->ID, "lightPos");
+            }
     }
     else sPressed = false;
 

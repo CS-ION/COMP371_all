@@ -32,7 +32,7 @@ private:
     int currentMode;
     bool wireframe;
 
-    // Uniform locations (cached)
+    // Uniform locations
     GLint mvLoc;
     GLint projLoc;
     GLint lightLoc;
@@ -48,4 +48,6 @@ private:
 
     int width;
     int height;
+
+    size_t expandedVertexCount = 0;
 };
