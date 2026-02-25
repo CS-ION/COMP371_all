@@ -17,13 +17,15 @@ void A1solution::loadFile(const std::string& filename)
 {
     std::ifstream file(filename);
 
-    for(int i=0;i<4;i++)
-        for(int j=0;j<4;j++)
-            file >> modelView[j][i];
+    
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            file >> modelView[i][j]; 
 
-    for(int i=0;i<4;i++)
-        for(int j=0;j<4;j++)
-            file >> projection[j][i];
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            file >> projection[i][j]; 
+
 
     file >> width >> height;
 
