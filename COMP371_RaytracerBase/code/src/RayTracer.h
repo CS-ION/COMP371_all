@@ -26,6 +26,15 @@ struct Rectangle {
     Vector3d color;
 };
 
+struct Output {
+    Vector3d cameraCenter;
+    Vector3d lookAt;
+    Vector3d up;
+    double fov;
+    Vector2i imageSize;
+    std::string filename;
+    Vector3d backgroundColor;
+};
 
 class RayTracer {
 public:
@@ -39,15 +48,7 @@ private:
     // Scene data
     std::vector<Sphere> spheres;
     std::vector<Rectangle> rectangles;
-
-    Vector3d cameraCenter;
-    Vector3d lookAt;
-    Vector3d up;
-    double fov;
-
-    Vector2i imageSize;
-    std::string filename;
-    Vector3d backgroundColor;
+    std::vector<Output> outputs;
 
     void parseScene(const nlohmann::json& j);
     bool intersectSphere(const Ray& ray, const Sphere& sphere, double& t);
@@ -56,35 +57,40 @@ private:
 
 void RayTracer::parseScene(const nlohmann::json& j) {
 
-    auto output = j["output"][0];
+    for (auto& output : j["output"]) {
+        Output out;
 
-    cameraCenter = Vector3d(
-        output["centre"][0],
-        output["centre"][1],
-        output["centre"][2]
-    );
+        out.cameraCenter = Vector3d(
+            output["centre"][0],
+            output["centre"][1],
+            output["centre"][2]
+        );
 
-    lookAt = Vector3d(
-        output["lookat"][0],
-        output["lookat"][1],
-        output["lookat"][2]
-    );
+        out.lookAt = Vector3d(
+            output["lookat"][0],
+            output["lookat"][1],
+            output["lookat"][2]
+        );
 
-    up = Vector3d(
-        output["up"][0],
-        output["up"][1],
-        output["up"][2]
-    );
+        out.up = Vector3d(
+            output["up"][0],
+            output["up"][1],
+            output["up"][2]
+        );
 
-    fov = output["fov"];
-    imageSize = Vector2i(output["size"][0], output["size"][1]);
+        out.fov = output["fov"];
+        out.imageSize = Vector2i(output["size"][0], output["size"][1]);
 
-    filename = output["filename"];
-    backgroundColor = Vector3d(
-        output["bkc"][0],
-        output["bkc"][1],
-        output["bkc"][2]
-    );
+        out.filename = output["filename"];
+
+        out.backgroundColor = Vector3d(
+            output["bkc"][0],
+            output["bkc"][1],
+            output["bkc"][2]
+        );
+
+        outputs.push_back(out);
+    }
 
     for (auto& g : j["geometry"]) {
         if (g["type"] == "sphere") {
@@ -140,8 +146,8 @@ bool RayTracer::intersectSphere(const Ray& ray, const Sphere& sphere, double& t)
     return t > 0;
 }
 
-bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, double& t)
-{
+bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, double& t) {
+
     Vector3d edge1 = rect.p2 - rect.p1;
     Vector3d edge2 = rect.p3 - rect.p1;
     Vector3d normal = edge1.cross(edge2);
@@ -186,71 +192,74 @@ bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, double
 }
 
 void RayTracer::run() {
+    
+    for (auto& out : outputs) {
 
-    int width = imageSize.x();
-    int height = imageSize.y();
+        int width = out.imageSize.x();
+        int height = out.imageSize.y();
 
-    std::vector<double> framebuffer(width * height * 3);
+        std::vector<double> framebuffer(width * height * 3);
 
-    // Camera basis
-    Vector3d w = -lookAt.normalized();
-    Vector3d u = up.cross(w).normalized();
-    Vector3d v = w.cross(u);
+        // Camera basis
+        Vector3d w = -out.lookAt.normalized();
+        Vector3d u = out.up.cross(w).normalized();
+        Vector3d v = w.cross(u);
 
-    double aspect = double(width) / double(height);
-    double scale = tan((fov * M_PI / 180.0) / 2.0);
+        double aspect = double(width) / double(height);
+        double scale = tan((out.fov * M_PI / 180.0) / 2.0);
 
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
 
-            double x = (2.0 * (i + 0.5) / double(width) - 1.0) * aspect * scale;
-            double y = (1.0 - 2.0 * (j + 0.5) / double(height)) * scale;
+                double x = (2.0 * (i + 0.5) / double(width) - 1.0) * aspect * scale;
+                double y = (1.0 - 2.0 * (j + 0.5) / double(height)) * scale;
 
-            Vector3d dir = (x * u + y * v - w).normalized();
+                Vector3d dir = (x * u + y * v - w).normalized();
 
-            Ray ray;
-            ray.origin = cameraCenter;
-            ray.direction = dir;
+                Ray ray;
+                ray.origin = out.cameraCenter;
+                ray.direction = dir;
 
-            bool hit = false;
-            double closestT = std::numeric_limits<double>::max();
-            Vector3d hitColor = backgroundColor;
+                bool hit = false;
+                double closestT = std::numeric_limits<double>::max();
+                Vector3d hitColor = out.backgroundColor;
 
-            for (auto& sphere : spheres) {
-                double t;
-                if (intersectSphere(ray, sphere, t)) {
-                    if (t < closestT) {
-                        closestT = t;
-                        hit = true;
-                        hitColor = sphere.color;
+                for (auto& sphere : spheres) {
+                    double t;
+                    if (intersectSphere(ray, sphere, t)) {
+                        if (t < closestT) {
+                            closestT = t;
+                            hit = true;
+                            hitColor = sphere.color;
+                        }
                     }
                 }
-            }
 
-            for (auto& rect : rectangles) {
-                double t;
-                if (intersectRectangle(ray, rect, t)) {
-                    if (t < closestT) {
-                        closestT = t;
-                        hit = true;
-                        hitColor = rect.color;
+                for (auto& rect : rectangles) {
+                    double t;
+                    if (intersectRectangle(ray, rect, t)) {
+                        if (t < closestT) {
+                            closestT = t;
+                            hit = true;
+                            hitColor = rect.color;
+                        }
                     }
                 }
-            }
 
-            int index = 3 * (j * width + i);
+                int index = 3 * (j * width + i);
 
-            if (hit) {
-                framebuffer[index + 0] = hitColor.x();
-                framebuffer[index + 1] = hitColor.y();
-                framebuffer[index + 2] = hitColor.z();
-            } else {
-                framebuffer[index + 0] = backgroundColor.x();
-                framebuffer[index + 1] = backgroundColor.y();
-                framebuffer[index + 2] = backgroundColor.z();
+                if (hit) {
+                    framebuffer[index + 0] = hitColor.x();
+                    framebuffer[index + 1] = hitColor.y();
+                    framebuffer[index + 2] = hitColor.z();
+                } else {
+                    framebuffer[index + 0] = out.backgroundColor.x();
+                    framebuffer[index + 1] = out.backgroundColor.y();
+                    framebuffer[index + 2] = out.backgroundColor.z();
+                }
             }
         }
-    }
 
-    save_ppm(filename, framebuffer, width, height);
+        save_ppm(out.filename, framebuffer, width, height);
+    }
 }
