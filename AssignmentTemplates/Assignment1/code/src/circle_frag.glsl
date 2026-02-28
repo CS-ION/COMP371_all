@@ -33,7 +33,7 @@ void main()
     vec3 ambientColor;
     vec3 specularColor = vec3(0.3,0.3,0.3);
 
-    if(d <= r)
+    if(d >= r)
     {
         diffuseColor = vec3(0.5,0.5,1);
         ambientColor = vec3(0.05,0.05,0.1);
