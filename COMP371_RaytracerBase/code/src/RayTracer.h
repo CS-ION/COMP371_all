@@ -159,6 +159,11 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
     for (auto& l : j["light"]) {
 
+        /* 
+        For A4, we only consider point light sources and area sources with usecenter = true
+        We will discard the rest until we implement area light stratified sampling in A5
+        */
+
         bool use = true;
         if (l.contains("use"))
             use = l["use"];
