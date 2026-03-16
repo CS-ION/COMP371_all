@@ -38,6 +38,7 @@ struct Light {
     Vector3d position;
     Vector3d id;
     Vector3d is;
+    bool use = true;
 };
 
 struct Output {
@@ -157,22 +158,78 @@ void RayTracer::parseScene(const nlohmann::json& j) {
     }
 
     for (auto& l : j["light"]) {
+
+        bool use = true;
+        if (l.contains("use"))
+            use = l["use"];
+
+        if (!use)
+            continue;
+
         if (l["type"] == "point") {
             Light light;
             light.type = "point";
             light.position = Vector3d(
-                l["centre"][0], 
-                l["centre"][1], 
-                l["centre"][2]);
+                l["centre"][0],
+                l["centre"][1],
+                l["centre"][2]
+            );
             light.id = Vector3d(
-                l["id"][0], 
-                l["id"][1], 
-                l["id"][2]);
+                l["id"][0],
+                l["id"][1],
+                l["id"][2]
+            );
             light.is = Vector3d(
-                l["is"][0], 
-                l["is"][1], 
-                l["is"][2]);
+                l["is"][0],
+                l["is"][1],
+                l["is"][2]
+            );
             lights.push_back(light);
+        }
+
+        if (l["type"] == "area") {
+
+            bool usecenter = false;
+            if (l.contains("usecenter"))
+                usecenter = l["usecenter"];
+
+            if (usecenter) {
+
+                Vector3d p1(
+                    l["p1"][0],
+                    l["p1"][1],
+                    l["p1"][2]);
+                Vector3d p2(
+                    l["p2"][0],
+                    l["p2"][1],
+                    l["p2"][2]);
+                Vector3d p3(
+                    l["p3"][0],
+                    l["p3"][1],
+                    l["p3"][2]);
+                Vector3d p4(
+                    l["p4"][0],
+                    l["p4"][1],
+                    l["p4"][2]);
+                Vector3d center = (p1 + p2 + p3 + p4) / 4.0;
+
+                Light light;
+                light.type = "point";
+                light.position = center;
+
+                light.id = Vector3d(
+                    l["id"][0],
+                    l["id"][1],
+                    l["id"][2]
+                );
+                light.is = Vector3d(
+                    l["is"][0],
+                    l["is"][1],
+                    l["is"][2]
+                );
+
+                lights.push_back(light);
+            }
         }
     }
 }
