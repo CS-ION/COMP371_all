@@ -284,7 +284,7 @@ bool RayTracer::trace(const Ray& ray, HitInfo& closestHit) {
 
 Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out) {
 
-    // ----- Ambient -----
+    // Ambient Component
     Vector3d color =
     hit.material.ka *
     hit.material.ac.cwiseProduct(out.ai);
@@ -315,13 +315,13 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
         if (NdotL <= 0.0)
             continue;
 
-        // ----- Diffuse -----
+        // Diffuse Component
         Vector3d diffuse =
             hit.material.kd *
             hit.material.dc.cwiseProduct(light.id) *
             NdotL;
 
-        // ----- Specular -----
+        // Specular Component (Blinn-Phong)
         Vector3d H = (L + V).normalized();
         double NdotH = std::max(0.0, N.dot(H));
 
@@ -329,19 +329,6 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
             hit.material.ks *
             hit.material.sc.cwiseProduct(light.is) *
             std::pow(NdotH, hit.material.pc);
-
-        /*
-
-        // ----- Specular (Classic Phong using R·V) -----
-        Vector3d R = (2.0 * NdotL * N - L).normalized();
-        double RdotV = std::max(0.0, R.dot(V));
-
-        Vector3d specular =
-            hit.material.ks *
-            hit.material.sc.cwiseProduct(light.is) *
-            std::pow(RdotV, hit.material.pc);
-        
-        */
 
         color += diffuse + specular;
     }
