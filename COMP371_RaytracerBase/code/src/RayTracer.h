@@ -30,6 +30,7 @@ struct Sphere {
 
 struct Rectangle {
     Vector3d p1, p2, p3, p4;
+    Vector3d normal;
     Material material;
 };
 
@@ -78,7 +79,8 @@ private:
     void parseScene(const nlohmann::json& j);
     bool intersectSphere(const Ray& ray, const Sphere& sphere, HitInfo& hit);
     bool intersectRectangle(const Ray& ray, const Rectangle& rect, HitInfo& hit);
-    bool trace(const Ray& ray, HitInfo& hit);
+    bool tracePrimaryRay(const Ray& ray, HitInfo& hit);
+    bool traceShadowRay(const Ray& ray, double maxT);
     Vector3d shade(const Ray& ray, const HitInfo& hit, const Output& out);
 };
 
@@ -152,6 +154,7 @@ void RayTracer::parseScene(const nlohmann::json& j) {
                 g["p4"][0], 
                 g["p4"][1], 
                 g["p4"][2]);
+            r.normal = (r.p2 - r.p1).cross(r.p3 - r.p1).normalized();
             r.material = mat;
             rectangles.push_back(r);
         }
@@ -270,9 +273,7 @@ bool RayTracer::intersectSphere(const Ray& ray, const Sphere& sphere, HitInfo& h
 
 bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, HitInfo& hit) {
 
-    Vector3d edge1 = rect.p2 - rect.p1;
-    Vector3d edge2 = rect.p3 - rect.p1;
-    Vector3d normal = edge1.cross(edge2).normalized();
+    Vector3d normal = rect.normal;
 
     double denom = normal.dot(ray.direction);
     if (fabs(denom) < 1e-8) 
@@ -314,7 +315,7 @@ bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, HitInf
     return true;
 }
 
-bool RayTracer::trace(const Ray& ray, HitInfo& closestHit) {
+bool RayTracer::tracePrimaryRay(const Ray& ray, HitInfo& closestHit) {
 
     bool hitAnything = false;
     double closestT = std::numeric_limits<double>::max();
@@ -344,6 +345,27 @@ bool RayTracer::trace(const Ray& ray, HitInfo& closestHit) {
     return hitAnything;
 }
 
+bool RayTracer::traceShadowRay(const Ray& ray, double maxT) {
+
+    HitInfo tempHit;
+
+    for (auto& s : spheres) {
+        if (intersectSphere(ray, s, tempHit)) {
+            if (tempHit.t < maxT)
+                return true;
+        }
+    }
+
+    for (auto& r : rectangles) {
+        if (intersectRectangle(ray, r, tempHit)) {
+            if (tempHit.t < maxT)
+                return true;
+        }
+    }
+
+    return false;
+}
+
 Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out) {
 
     // Ambient Component
@@ -369,8 +391,7 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
         shadowRay.origin = hit.point + 1e-6 * N;
         shadowRay.direction = L;
 
-        HitInfo shadowHit;
-        if (trace(shadowRay, shadowHit) && shadowHit.t < lightDistance)
+        if (traceShadowRay(shadowRay, lightDistance))
             continue; // in shadow
 
         double NdotL = N.dot(L);
@@ -431,7 +452,7 @@ void RayTracer::run() {
 
                 Vector3d pixelColor = out.backgroundColor;
 
-                if (trace(ray, hit))
+                if (tracePrimaryRay(ray, hit))
                     pixelColor = shade(ray, hit, out);
 
                 int idx = 3 * (j * width + i);
