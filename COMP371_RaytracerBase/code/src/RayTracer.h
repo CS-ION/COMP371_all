@@ -31,6 +31,7 @@ struct Sphere {
 struct Rectangle {
     Vector3d p1, p2, p3, p4;
     Vector3d normal;
+    Vector3d e1, e2, e3, e4;
     Material material;
 };
 
@@ -107,18 +108,9 @@ void RayTracer::parseScene(const nlohmann::json& j) {
     for (auto& g : j["geometry"]) {
 
         Material mat;
-        mat.ac = Vector3d(
-            g["ac"][0], 
-            g["ac"][1], 
-            g["ac"][2]);
-        mat.dc = Vector3d(
-            g["dc"][0], 
-            g["dc"][1], 
-            g["dc"][2]);
-        mat.sc = Vector3d(
-            g["sc"][0], 
-            g["sc"][1], 
-            g["sc"][2]);
+        mat.ac = Vector3d(g["ac"][0], g["ac"][1], g["ac"][2]);
+        mat.dc = Vector3d(g["dc"][0], g["dc"][1], g["dc"][2]);
+        mat.sc = Vector3d(g["sc"][0], g["sc"][1], g["sc"][2]);
         mat.ka = g["ka"];
         mat.kd = g["kd"];
         mat.ks = g["ks"];
@@ -126,11 +118,7 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
         if (g["type"] == "sphere") {
             Sphere s;
-            s.center = Vector3d(
-                g["centre"][0],
-                g["centre"][1],
-                g["centre"][2]
-            );
+            s.center = Vector3d(g["centre"][0],g["centre"][1],g["centre"][2]);
             s.radius = g["radius"];
             s.material = mat;
             spheres.push_back(s);
@@ -138,23 +126,15 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
         if (g["type"] == "rectangle") {
             Rectangle r;
-            r.p1 = Vector3d(
-                g["p1"][0], 
-                g["p1"][1], 
-                g["p1"][2]);
-            r.p2 = Vector3d(
-                g["p2"][0], 
-                g["p2"][1], 
-                g["p2"][2]);
-            r.p3 = Vector3d(
-                g["p3"][0], 
-                g["p3"][1], 
-                g["p3"][2]);
-            r.p4 = Vector3d(
-                g["p4"][0], 
-                g["p4"][1], 
-                g["p4"][2]);
+            r.p1 = Vector3d(g["p1"][0], g["p1"][1], g["p1"][2]);
+            r.p2 = Vector3d(g["p2"][0], g["p2"][1], g["p2"][2]);
+            r.p3 = Vector3d(g["p3"][0], g["p3"][1], g["p3"][2]);
+            r.p4 = Vector3d(g["p4"][0], g["p4"][1], g["p4"][2]);
             r.normal = (r.p2 - r.p1).cross(r.p3 - r.p1).normalized();
+            r.e1 = r.p2 - r.p1;
+            r.e2 = r.p3 - r.p2;
+            r.e3 = r.p4 - r.p3;
+            r.e4 = r.p1 - r.p4;
             r.material = mat;
             rectangles.push_back(r);
         }
@@ -177,21 +157,9 @@ void RayTracer::parseScene(const nlohmann::json& j) {
         if (l["type"] == "point") {
             Light light;
             light.type = "point";
-            light.position = Vector3d(
-                l["centre"][0],
-                l["centre"][1],
-                l["centre"][2]
-            );
-            light.id = Vector3d(
-                l["id"][0],
-                l["id"][1],
-                l["id"][2]
-            );
-            light.is = Vector3d(
-                l["is"][0],
-                l["is"][1],
-                l["is"][2]
-            );
+            light.position = Vector3d(l["centre"][0],l["centre"][1],l["centre"][2]);
+            light.id = Vector3d(l["id"][0],l["id"][1],l["id"][2]);
+            light.is = Vector3d(l["is"][0],l["is"][1],l["is"][2]);
             lights.push_back(light);
         }
 
@@ -203,38 +171,18 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
             if (usecenter) {
 
-                Vector3d p1(
-                    l["p1"][0],
-                    l["p1"][1],
-                    l["p1"][2]);
-                Vector3d p2(
-                    l["p2"][0],
-                    l["p2"][1],
-                    l["p2"][2]);
-                Vector3d p3(
-                    l["p3"][0],
-                    l["p3"][1],
-                    l["p3"][2]);
-                Vector3d p4(
-                    l["p4"][0],
-                    l["p4"][1],
-                    l["p4"][2]);
+                Vector3d p1(l["p1"][0],l["p1"][1],l["p1"][2]);
+                Vector3d p2(l["p2"][0],l["p2"][1],l["p2"][2]);
+                Vector3d p3(l["p3"][0],l["p3"][1],l["p3"][2]);
+                Vector3d p4(l["p4"][0],l["p4"][1],l["p4"][2]);
                 Vector3d center = (p1 + p2 + p3 + p4) / 4.0;
 
                 Light light;
                 light.type = "point";
                 light.position = center;
 
-                light.id = Vector3d(
-                    l["id"][0],
-                    l["id"][1],
-                    l["id"][2]
-                );
-                light.is = Vector3d(
-                    l["is"][0],
-                    l["is"][1],
-                    l["is"][2]
-                );
+                light.id = Vector3d(l["id"][0],l["id"][1],l["id"][2]);
+                light.is = Vector3d(l["is"][0],l["is"][1],l["is"][2]);
 
                 lights.push_back(light);
             }
@@ -246,7 +194,7 @@ bool RayTracer::intersectSphere(const Ray& ray, const Sphere& sphere, HitInfo& h
 
     Vector3d oc = ray.origin - sphere.center;
 
-    double a = ray.direction.dot(ray.direction);
+    double a = 1.0;
     double b = 2.0 * oc.dot(ray.direction);
     double c = oc.dot(oc) - sphere.radius * sphere.radius;
 
@@ -287,22 +235,22 @@ bool RayTracer::intersectRectangle(const Ray& ray, const Rectangle& rect, HitInf
     Vector3d edge;
     Vector3d C;
 
-    edge = rect.p2 - rect.p1;
+    edge = rect.e1;
     C = P - rect.p1;
     if (normal.dot(edge.cross(C)) < 0) 
         return false;
 
-    edge = rect.p3 - rect.p2;
+    edge = rect.e2;
     C = P - rect.p2;
     if (normal.dot(edge.cross(C)) < 0) 
         return false;
 
-    edge = rect.p4 - rect.p3;
+    edge = rect.e3;
     C = P - rect.p3;
     if (normal.dot(edge.cross(C)) < 0) 
         return false;
 
-    edge = rect.p1 - rect.p4;
+    edge = rect.e4;
     C = P - rect.p4;
     if (normal.dot(edge.cross(C)) < 0) 
         return false;
@@ -405,13 +353,17 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
             NdotL;
 
         // Specular Component (Blinn-Phong)
-        Vector3d H = (L + V).normalized();
-        double NdotH = std::max(0.0, N.dot(H));
+        Vector3d specular(0,0,0);
+        if (hit.material.ks > 0.0) {
+            Vector3d H = (L + V);
+            H.normalize();
+            double NdotH = std::max(0.0, N.dot(H));
 
-        Vector3d specular =
-            hit.material.ks *
-            hit.material.sc.cwiseProduct(light.is) *
-            std::pow(NdotH, hit.material.pc);
+            specular =
+                hit.material.ks *
+                hit.material.sc.cwiseProduct(light.is) *
+                std::pow(NdotH, hit.material.pc);
+        }
 
         color += diffuse + specular;
     }
