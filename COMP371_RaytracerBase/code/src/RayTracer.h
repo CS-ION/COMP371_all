@@ -375,7 +375,7 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
             // Stratified Sampling
             int samples = light.n;
             Vector3d edge1 = light.p2 - light.p1;
-            Vector3d edge2 = light.p4 - light.p1;
+            Vector3d edge2 = light.p3 - light.p2;
             
             int validSamples = 0;
             Vector3d accumulated(0,0,0);
@@ -393,7 +393,7 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
                     L.normalize();
 
                     Ray shadowRay;
-                    shadowRay.origin = hit.point + 1e-4 * N;
+                    shadowRay.origin = hit.point + 1e-6 * N;
                     shadowRay.direction = L;
 
                     if (traceShadowRay(shadowRay, lightDistance))
