@@ -38,6 +38,11 @@ struct Rectangle {
 struct Light {
     std::string type;
     Vector3d position;
+
+    Vector3d p1, p2, p3, p4;
+    int n;
+    bool usecenter = false;
+
     Vector3d id;
     Vector3d is;
     bool use = true;
@@ -49,6 +54,7 @@ struct Output {
     Vector3d up;
     double fov;
     Vector2i imageSize;
+    Vector2i raysPerPixel;
     std::string filename;
     Vector3d backgroundColor;
     Vector3d ai;
@@ -101,7 +107,10 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
         if (o.contains("twosiderender"))
             out.twosiderender = o["twosiderender"];
-
+        
+        if (o.contains("raysperpixel"))
+            out.raysPerPixel = Vector2i(o["raysperpixel"][0],o["raysperpixel"][1]);
+        
         outputs.push_back(out);
     }
 
@@ -142,11 +151,6 @@ void RayTracer::parseScene(const nlohmann::json& j) {
 
     for (auto& l : j["light"]) {
 
-        /* 
-        For A4, we only consider point light sources and area sources with usecenter = true
-        We will discard the rest until we implement area light stratified sampling in A5
-        */
-
         bool use = true;
         if (l.contains("use"))
             use = l["use"];
@@ -164,28 +168,26 @@ void RayTracer::parseScene(const nlohmann::json& j) {
         }
 
         if (l["type"] == "area") {
+            Light light;
+            light.type = "area";
 
-            bool usecenter = false;
-            if (l.contains("usecenter"))
-                usecenter = l["usecenter"];
+            light.p1 = Vector3d(l["p1"][0], l["p1"][1], l["p1"][2]);
+            light.p2 = Vector3d(l["p2"][0], l["p2"][1], l["p2"][2]);
+            light.p3 = Vector3d(l["p3"][0], l["p3"][1], l["p3"][2]);
+            light.p4 = Vector3d(l["p4"][0], l["p4"][1], l["p4"][2]);
 
-            if (usecenter) {
+            light.id = Vector3d(l["id"][0], l["id"][1], l["id"][2]);
+            light.is = Vector3d(l["is"][0], l["is"][1], l["is"][2]);
 
-                Vector3d p1(l["p1"][0],l["p1"][1],l["p1"][2]);
-                Vector3d p2(l["p2"][0],l["p2"][1],l["p2"][2]);
-                Vector3d p3(l["p3"][0],l["p3"][1],l["p3"][2]);
-                Vector3d p4(l["p4"][0],l["p4"][1],l["p4"][2]);
-                Vector3d center = (p1 + p2 + p3 + p4) / 4.0;
+            if (l.contains("n"))
+                light.n = l["n"];
 
-                Light light;
-                light.type = "point";
-                light.position = center;
-
-                light.id = Vector3d(l["id"][0],l["id"][1],l["id"][2]);
-                light.is = Vector3d(l["is"][0],l["is"][1],l["is"][2]);
-
-                lights.push_back(light);
+            if (l.contains("usecenter")){
+                light.usecenter = l["usecenter"];
+                light.position = (light.p1 + light.p2 + light.p3 + light.p4) / 4.0;
             }
+
+            lights.push_back(light);
         }
     }
 }
@@ -326,46 +328,111 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
 
     if (out.twosiderender && N.dot(V) < 0.0)
         N = -N;
-
+    
     for (const auto& light : lights) {
 
-        // Light direction
-        Vector3d L = light.position - hit.point;
-        double lightDistance = L.norm();
-        L.normalize();
+        if (light.type == "point" || light.usecenter) {
+            Vector3d L = light.position - hit.point;
+            double lightDistance = L.norm();
+            L.normalize();
 
-        // Shadow ray
-        Ray shadowRay;
-        shadowRay.origin = hit.point + 1e-6 * N;
-        shadowRay.direction = L;
+            Ray shadowRay;
+            shadowRay.origin = hit.point + 1e-6 * N;
+            shadowRay.direction = L;
 
-        if (traceShadowRay(shadowRay, lightDistance))
-            continue; // in shadow
+            if (traceShadowRay(shadowRay, lightDistance))
+                continue;
 
-        double NdotL = N.dot(L);
-        if (NdotL <= 0.0)
-            continue;
+            double NdotL = N.dot(L);
+            if (NdotL <= 0.0)
+                continue;
 
-        // Diffuse Component
-        Vector3d diffuse =
-            hit.material.kd *
-            hit.material.dc.cwiseProduct(light.id) *
-            NdotL;
+            Vector3d diffuse(0,0,0);
+            if (hit.material.kd > 0.0) {
+                diffuse =
+                    hit.material.kd *
+                    hit.material.dc.cwiseProduct(light.id) *
+                    NdotL;
+            }
 
-        // Specular Component (Blinn-Phong)
-        Vector3d specular(0,0,0);
-        if (hit.material.ks > 0.0) {
-            Vector3d H = (L + V);
-            H.normalize();
-            double NdotH = std::max(0.0, N.dot(H));
+            Vector3d specular(0,0,0);
+            if (hit.material.ks > 0.0) {
+                Vector3d H = L + V;
+                H.normalize();
+                double NdotH = std::max(0.0, N.dot(H));
 
-            specular =
-                hit.material.ks *
-                hit.material.sc.cwiseProduct(light.is) *
-                std::pow(NdotH, hit.material.pc);
+                specular =
+                    hit.material.ks *
+                    hit.material.sc.cwiseProduct(light.is) *
+                    std::pow(NdotH, hit.material.pc);
+            }
+
+            color += diffuse + specular;
         }
 
-        color += diffuse + specular;
+        else if (light.type == "area") {
+
+            // Stratified Sampling
+            int samples = light.n;
+            Vector3d edge1 = light.p2 - light.p1;
+            Vector3d edge2 = light.p4 - light.p1;
+            
+            int validSamples = 0;
+            Vector3d accumulated(0,0,0);
+
+            for (int i = 0; i < samples; i++) {
+                for (int j = 0; j < samples; j++) {
+
+                    double u = (i + (double)rand() / RAND_MAX) / samples;
+                    double v = (j + (double)rand() / RAND_MAX) / samples;
+
+                    Vector3d samplePoint = light.p1 + u * edge1 + v * edge2;
+
+                    Vector3d L = samplePoint - hit.point;
+                    double lightDistance = L.norm();
+                    L.normalize();
+
+                    Ray shadowRay;
+                    shadowRay.origin = hit.point + 1e-4 * N;
+                    shadowRay.direction = L;
+
+                    if (traceShadowRay(shadowRay, lightDistance))
+                        continue;
+
+                    double NdotL = N.dot(L);
+                    if (NdotL <= 0.0)
+                        continue;
+
+                    Vector3d diffuse(0,0,0);
+                    Vector3d specular(0,0,0);
+
+                    if (hit.material.kd > 0.0) {
+                        diffuse =
+                            hit.material.kd *
+                            hit.material.dc.cwiseProduct(light.id) *
+                            NdotL;
+                    }
+
+                    if (hit.material.ks > 0.0) {
+                        Vector3d H = (L + V);
+                        H.normalize();
+                        double NdotH = std::max(0.0, N.dot(H));
+
+                        specular =
+                            hit.material.ks *
+                            hit.material.sc.cwiseProduct(light.is) *
+                            std::pow(NdotH, hit.material.pc);
+                    }
+
+                    validSamples++;
+                    accumulated += diffuse + specular;
+                }
+            }
+
+            if (validSamples > 0)
+                accumulated /= validSamples;
+            color += accumulated;
+        }
     }
 
     return color.cwiseMin(1.0);
@@ -391,21 +458,38 @@ void RayTracer::run() {
         for (int j = 0; j < height; j++) {
             for (int i = 0; i < width; i++) {
 
-                double x = (2.0 * (i + 0.5) / double(width) - 1.0) * aspect * scale;
-                double y = (1.0 - 2.0 * (j + 0.5) / double(height)) * scale;
+                int sx = out.raysPerPixel.x();
+                int sy = out.raysPerPixel.y();
 
-                Vector3d dir = (x*u + y*v - w).normalized();
+                Vector3d pixelColor(0,0,0);
 
-                Ray ray;
-                ray.origin = out.cameraCenter;
-                ray.direction = dir;
+                for (int a = 0; a < sx; a++) {
+                    for (int b = 0; b < sy; b++) {
 
-                HitInfo hit;
+                        double su = (i + (a + (double)rand()/RAND_MAX)/sx) / double(width);
+                        double sv = (j + (b + (double)rand()/RAND_MAX)/sy) / double(height);
 
-                Vector3d pixelColor = out.backgroundColor;
+                        double x = (2.0 * su - 1.0) * aspect * scale;
+                        double y = (1.0 - 2.0 * sv) * scale;
 
-                if (tracePrimaryRay(ray, hit))
-                    pixelColor = shade(ray, hit, out);
+                        Vector3d dir = (x*u + y*v - w).normalized();
+
+                        Ray ray;
+                        ray.origin = out.cameraCenter;
+                        ray.direction = dir;
+
+                        HitInfo hit;
+
+                        Vector3d sampleColor = out.backgroundColor;
+
+                        if (tracePrimaryRay(ray, hit))
+                            sampleColor = shade(ray, hit, out);
+
+                        pixelColor += sampleColor;
+                    }
+                }
+
+                pixelColor /= (sx * sy);
 
                 int idx = 3 * (j * width + i);
                 framebuffer[idx] = pixelColor.x();
