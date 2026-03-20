@@ -375,7 +375,7 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
             // Stratified Sampling
             int samples = light.n;
             Vector3d edge1 = light.p2 - light.p1;
-            Vector3d edge2 = light.p3 - light.p2;
+            Vector3d edge2 = light.p4 - light.p1;
             
             int validSamples = 0;
             Vector3d accumulated(0,0,0);
@@ -430,9 +430,10 @@ Vector3d RayTracer::shade(const Ray& ray, const HitInfo& hit, const Output& out)
             }
 
             if (validSamples > 0)
-                accumulated /= validSamples;
+                accumulated /= (samples * samples);
             color += accumulated;
         }
+    
     }
 
     return color.cwiseMin(1.0);
