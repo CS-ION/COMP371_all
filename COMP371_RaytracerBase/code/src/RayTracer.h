@@ -38,11 +38,9 @@ struct Rectangle {
 struct Light {
     std::string type;
     Vector3d position;
-
     Vector3d p1, p2, p3, p4;
     int n;
     bool usecenter = false;
-
     Vector3d id;
     Vector3d is;
     bool use = true;
@@ -54,7 +52,7 @@ struct Output {
     Vector3d up;
     double fov;
     Vector2i imageSize;
-    Vector2i raysPerPixel;
+    Vector2i raysPerPixel = Vector2i(1,1);
     std::string filename;
     Vector3d backgroundColor;
     Vector3d ai;
@@ -73,7 +71,6 @@ public:
     RayTracer(const nlohmann::json& j) {
         parseScene(j);
     }
-
     void run();
 
 private:
